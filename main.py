@@ -23,9 +23,9 @@ def parse_arguments():
     parser.add_argument('--tgt', type=str, default="dvd",
                         choices=["books", "dvd", "electronics", "kitchen", "blog", "airline", "imdb"],
                         help="Specify tgt dataset")
-    parser.add_argument('--pretrain', default=False, action='store_true',
+    parser.add_argument('--pretrain', default=True, action='store_true',
                         help='Force to pretrain source encoder/classifier')
-    parser.add_argument('--adapt', default=False, action='store_true',
+    parser.add_argument('--adapt', default=True, action='store_true',
                         help='Force to adapt target encoder')
     parser.add_argument('--seed', type=int, default=42,
                         help="Specify random state")
@@ -36,7 +36,7 @@ def parse_arguments():
     parser.add_argument('--model', type=str, default="bert",
                         choices=["bert", "distilbert", "roberta", "distilroberta"],
                         help="Specify model type")
-    parser.add_argument('--max_seq_length', type=int, default=128,
+    parser.add_argument('--max_seq_length', type=int, default=512,
                         help="Specify maximum sequence length")
     parser.add_argument('--alpha', type=float, default=1.0,
                         help="Specify adversarial weight")
