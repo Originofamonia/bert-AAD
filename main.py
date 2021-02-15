@@ -90,20 +90,6 @@ def set_seed(seed):
 
 def main():
     args = parse_arguments()
-    # argument setting
-    print("=== Argument Setting ===")
-    print("src: " + args.src)
-    print("tgt: " + args.tgt)
-    print("seed: " + str(args.seed))
-    print("train_seed: " + str(args.train_seed))
-    print("model_type: " + str(args.model))
-    print("max_seq_length: " + str(args.max_seq_length))
-    print("batch_size: " + str(args.batch_size))
-    print("pre_epochs: " + str(args.pre_epochs))
-    print("num_epochs: " + str(args.num_epochs))
-    print("AD weight: " + str(args.alpha))
-    print("KD weight: " + str(args.beta))
-    print("temperature: " + str(args.temperature))
     set_seed(args.train_seed)
 
     if args.model in ['roberta', 'distilroberta']:
@@ -208,6 +194,20 @@ def main():
         tgt_encoder = adapt(args, src_encoder, tgt_encoder, discriminator,
                             src_classifier, src_data_loader, tgt_data_train_loader, tgt_data_all_loader)
 
+    # argument setting
+    print("=== Argument Setting ===")
+    print("src: " + args.src)
+    print("tgt: " + args.tgt)
+    print("seed: " + str(args.seed))
+    print("train_seed: " + str(args.train_seed))
+    print("model_type: " + str(args.model))
+    print("max_seq_length: " + str(args.max_seq_length))
+    print("batch_size: " + str(args.batch_size))
+    print("pre_epochs: " + str(args.pre_epochs))
+    print("num_epochs: " + str(args.num_epochs))
+    print("AD weight: " + str(args.alpha))
+    print("KD weight: " + str(args.beta))
+    print("temperature: " + str(args.temperature))
     # eval target encoder on lambda0.1 set of target dataset
     print("=== Evaluating classifier for encoded target domain ===")
     print(">>> source only <<<")
