@@ -57,7 +57,7 @@ def parse_arguments():
                         help="Specify log step size for pretrain")
     parser.add_argument('--num_epochs', type=int, default=100,
                         help="Specify the number of epochs for adaptation")
-    parser.add_argument('--log_step', type=int, default=1,
+    parser.add_argument('--log_step', type=int, default=5,
                         help="Specify log step size for adaptation")
     return parser.parse_args()
 

@@ -42,7 +42,7 @@ def pretrain(args, encoder, classifier, data_loader):
             optimizer.step()
 
             # print step info
-            if (step + 1) % args.pre_log_step == 0:
+            if step % args.pre_log_step == 0:
                 desc = f"Epoch [{epoch}/{args.pre_epochs}] Step [{step}/{len(data_loader)}]: " \
                        f"c_loss={cls_loss.item():.4f} "
                 pbar.set_description(desc=desc)
@@ -138,7 +138,7 @@ def adapt(args, src_encoder, tgt_encoder, discriminator,
             # optimize target encoder
             optimizer_G.step()
 
-            if (step + 1) % args.log_step == 0:
+            if step % args.log_step == 0:
                 desc = f"Epoch [{epoch}/{args.num_epochs}] Step [{step}/{len_data_loader}]: acc={acc.item():.4f} " \
                        f"g_loss={gen_loss.item():.4f} d_loss={dis_loss.item():.4f} kd_loss={kd_loss.item():.4f}"
                 pbar.set_description(desc=desc)
