@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 import param
 import torch.optim as optim
+from tqdm import tqdm
 from utils import save_model
 
 
@@ -22,7 +23,8 @@ def pretrain(args, encoder, classifier, data_loader):
     classifier.train()
 
     for epoch in range(args.pre_epochs):
-        for step, (reviews, mask, labels) in enumerate(data_loader):
+        pbar = tqdm(data_loader)
+        for step, (reviews, mask, labels) in enumerate(pbar):
             reviews = make_cuda(reviews)
             mask = make_cuda(mask)
             labels = make_cuda(labels)
@@ -41,16 +43,19 @@ def pretrain(args, encoder, classifier, data_loader):
 
             # print step info
             if (step + 1) % args.pre_log_step == 0:
-                print("Epoch [%.2d/%.2d] Step [%.3d/%.3d]: cls_loss=%.4f"
-                      % (epoch + 1,
-                         args.pre_epochs,
-                         step + 1,
-                         len(data_loader),
-                         cls_loss.item()))
+                desc = f"Epoch [{epoch}/{args.pre_epochs}] Step [{step}/{len(data_loader)}]: " \
+                       f"c_loss={cls_loss.item():.4f} "
+                pbar.set_description(desc=desc)
+                # print("Epoch [%.2d/%.2d] Step [%.3d/%.3d]: cls_loss=%.4f"
+                #       % (epoch + 1,
+                #          args.pre_epochs,
+                #          step + 1,
+                #          len(data_loader),
+                #          cls_loss.item()))
 
     # save final model
-    save_model(args, encoder, param.src_encoder_path)
-    save_model(args, classifier, param.src_classifier_path)
+    # save_model(args, encoder, param.src_encoder_path)
+    # save_model(args, classifier, param.src_classifier_path)
 
     return encoder, classifier
 
@@ -74,8 +79,8 @@ def adapt(args, src_encoder, tgt_encoder, discriminator,
 
     for epoch in range(args.num_epochs):
         # zip source and target data pair
-        data_zip = enumerate(zip(src_data_loader, tgt_data_train_loader))
-        for step, ((reviews_src, src_mask, _), (reviews_tgt, tgt_mask, _)) in data_zip:
+        pbar = tqdm(zip(src_data_loader, tgt_data_train_loader))
+        for step, ((reviews_src, src_mask, _), (reviews_tgt, tgt_mask, _)) in enumerate(pbar):
             reviews_src = make_cuda(reviews_src)
             src_mask = make_cuda(src_mask)
 
@@ -134,16 +139,19 @@ def adapt(args, src_encoder, tgt_encoder, discriminator,
             optimizer_G.step()
 
             if (step + 1) % args.log_step == 0:
-                print("Epoch [%.2d/%.2d] Step [%.3d/%.3d]: "
-                      "acc=%.4f g_loss=%.4f d_loss=%.4f kd_loss=%.4f"
-                      % (epoch + 1,
-                         args.num_epochs,
-                         step + 1,
-                         len_data_loader,
-                         acc.item(),
-                         gen_loss.item(),
-                         dis_loss.item(),
-                         kd_loss.item()))
+                desc = f"Epoch [{epoch}/{args.num_epochs}] Step [{step}/{len_data_loader}]: acc={acc.item():.4f} " \
+                       f"g_loss={gen_loss.item():.4f} d_loss={dis_loss.item():.4f} kd_loss={kd_loss.item():.4f}"
+                pbar.set_description(desc=desc)
+                # print("Epoch [%.2d/%.2d] Step [%.3d/%.3d]: "
+                #       "acc=%.4f g_loss=%.4f d_loss=%.4f kd_loss=%.4f"
+                #       % (epoch + 1,
+                #          args.num_epochs,
+                #          step + 1,
+                #          len_data_loader,
+                #          acc.item(),
+                #          gen_loss.item(),
+                #          dis_loss.item(),
+                #          kd_loss.item()))
 
         evaluate(tgt_encoder, src_classifier, tgt_data_all_loader)
 

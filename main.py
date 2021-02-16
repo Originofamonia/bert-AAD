@@ -9,6 +9,7 @@ from utils import XML2Array, CSV2Array, convert_examples_to_features, \
 from sklearn.model_selection import train_test_split
 from transformers import BertTokenizer, RobertaTokenizer
 import torch
+import torch.nn as nn
 import os
 import random
 import argparse
@@ -48,7 +49,7 @@ def parse_arguments():
                         help="Max gradient norm.")
     parser.add_argument("--clip_value", type=float, default=0.01,
                         help="lower and upper clip value for disc. weights")
-    parser.add_argument('--batch_size', type=int, default=64,
+    parser.add_argument('--batch_size', type=int, default=16,
                         help="Specify batch size")
     parser.add_argument('--pre_epochs', type=int, default=100,
                         help="Specify the number of epochs for pretrain")
@@ -68,6 +69,45 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
 
 
+def get_dataloader(args, tokenizer):
+    print("=== Processing datasets ===")
+    if args.src in ['blog', 'airline', 'imdb']:
+        src_x, src_y = CSV2Array(os.path.join('data', args.src, args.src + '.csv'))
+    else:
+        src_x, src_y = XML2Array(os.path.join('data', args.src, 'negative.review'),
+                                 os.path.join('data', args.src, 'positive.review'))
+    src_x, src_test_x, src_y, src_test_y = train_test_split(src_x, src_y,
+                                                            test_size=0.2,
+                                                            stratify=src_y,
+                                                            random_state=args.seed)
+    if args.tgt in ['blog', 'airline', 'imdb']:
+        tgt_x, tgt_y = CSV2Array(os.path.join('data', args.tgt, args.tgt + '.csv'))
+    else:
+        tgt_x, tgt_y = XML2Array(os.path.join('data', args.tgt, 'negative.review'),
+                                 os.path.join('data', args.tgt, 'positive.review'))
+    tgt_train_x, tgt_test_y, tgt_train_y, tgt_test_y = train_test_split(tgt_x, tgt_y,
+                                                                        test_size=0.2,
+                                                                        stratify=tgt_y,
+                                                                        random_state=args.seed)
+    if args.model in ['roberta', 'distilroberta']:
+        src_features = roberta_convert_examples_to_features(src_x, src_y, args.max_seq_length, tokenizer)
+        src_test_features = roberta_convert_examples_to_features(src_test_x, src_test_y, args.max_seq_length, tokenizer)
+        tgt_features = roberta_convert_examples_to_features(tgt_x, tgt_y, args.max_seq_length, tokenizer)
+        tgt_train_features = roberta_convert_examples_to_features(tgt_train_x, tgt_train_y, args.max_seq_length,
+                                                                  tokenizer)
+    else:
+        src_features = convert_examples_to_features(src_x, src_y, args.max_seq_length, tokenizer)
+        src_test_features = convert_examples_to_features(src_test_x, src_test_y, args.max_seq_length, tokenizer)
+        tgt_features = convert_examples_to_features(tgt_x, tgt_y, args.max_seq_length, tokenizer)
+        tgt_train_features = convert_examples_to_features(tgt_train_x, tgt_train_y, args.max_seq_length, tokenizer)
+    # load dataset
+    src_loader = get_data_loader(src_features, args.batch_size)
+    src_eval_loader = get_data_loader(src_test_features, args.batch_size)
+    tgt_train_loader = get_data_loader(tgt_train_features, args.batch_size)
+    tgt_all_loader = get_data_loader(tgt_features, args.batch_size)
+    return src_eval_loader, src_loader, tgt_all_loader, tgt_train_loader
+
+
 def main():
     args = parse_arguments()
     set_seed(args.train_seed)
@@ -78,46 +118,7 @@ def main():
         tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
     # preprocess data
-    print("=== Processing datasets ===")
-    if args.src in ['blog', 'airline', 'imdb']:
-        src_x, src_y = CSV2Array(os.path.join('data', args.src, args.src + '.csv'))
-    else:
-        src_x, src_y = XML2Array(os.path.join('data', args.src, 'negative.review'),
-                               os.path.join('data', args.src, 'positive.review'))
-
-    src_x, src_test_x, src_y, src_test_y = train_test_split(src_x, src_y,
-                                                            test_size=0.2,
-                                                            stratify=src_y,
-                                                            random_state=args.seed)
-
-    if args.tgt in ['blog', 'airline', 'imdb']:
-        tgt_x, tgt_y = CSV2Array(os.path.join('data', args.tgt, args.tgt + '.csv'))
-    else:
-        tgt_x, tgt_y = XML2Array(os.path.join('data', args.tgt, 'negative.review'),
-                                 os.path.join('data', args.tgt, 'positive.review'))
-
-    tgt_train_x, tgt_test_y, tgt_train_y, tgt_test_y = train_test_split(tgt_x, tgt_y,
-                                                                        test_size=0.2,
-                                                                        stratify=tgt_y,
-                                                                        random_state=args.seed)
-
-    if args.model in ['roberta', 'distilroberta']:
-        src_features = roberta_convert_examples_to_features(src_x, src_y, args.max_seq_length, tokenizer)
-        src_test_features = roberta_convert_examples_to_features(src_test_x, src_test_y, args.max_seq_length, tokenizer)
-        tgt_features = roberta_convert_examples_to_features(tgt_x, tgt_y, args.max_seq_length, tokenizer)
-        tgt_train_features = roberta_convert_examples_to_features(tgt_train_x, tgt_train_y, args.max_seq_length, tokenizer)
-    else:
-        src_features = convert_examples_to_features(src_x, src_y, args.max_seq_length, tokenizer)
-        src_test_features = convert_examples_to_features(src_test_x, src_test_y, args.max_seq_length, tokenizer)
-        tgt_features = convert_examples_to_features(tgt_x, tgt_y, args.max_seq_length, tokenizer)
-        tgt_train_features = convert_examples_to_features(tgt_train_x, tgt_train_y, args.max_seq_length, tokenizer)
-
-    # load dataset
-
-    src_data_loader = get_data_loader(src_features, args.batch_size)
-    src_data_eval_loader = get_data_loader(src_test_features, args.batch_size)
-    tgt_data_train_loader = get_data_loader(tgt_train_features, args.batch_size)
-    tgt_data_all_loader = get_data_loader(tgt_features, args.batch_size)
+    src_eval_loader, src_loader, tgt_all_loader, tgt_train_loader = get_dataloader(args, tokenizer)
 
     # load models
     if args.model == 'bert':
@@ -149,17 +150,25 @@ def main():
         tgt_encoder = init_model(args, tgt_encoder)
         discriminator = init_model(args, discriminator)
 
+    # parallel models
+    if torch.cuda.device_count() > 1:
+        print('Let\'s use {} GPUs!'.format(torch.cuda.device_count()))
+        src_encoder = nn.DataParallel(src_encoder)
+        src_classifier = nn.DataParallel(src_classifier)
+        tgt_encoder = nn.DataParallel(tgt_encoder)
+        discriminator = nn.DataParallel(discriminator)
+
     # train source model
     print("=== Training classifier for source domain ===")
     if args.pretrain:
         src_encoder, src_classifier = pretrain(
-            args, src_encoder, src_classifier, src_data_loader)
+            args, src_encoder, src_classifier, src_loader)
 
     # eval source model
     print("=== Evaluating classifier for source domain ===")
-    evaluate(src_encoder, src_classifier, src_data_loader)
-    evaluate(src_encoder, src_classifier, src_data_eval_loader)
-    evaluate(src_encoder, src_classifier, tgt_data_all_loader)
+    evaluate(src_encoder, src_classifier, src_loader)
+    evaluate(src_encoder, src_classifier, src_eval_loader)
+    evaluate(src_encoder, src_classifier, tgt_all_loader)
 
     for params in src_encoder.parameters():
         params.requires_grad = False
@@ -172,12 +181,10 @@ def main():
     if args.adapt:
         tgt_encoder.load_state_dict(src_encoder.state_dict())
         tgt_encoder = adapt(args, src_encoder, tgt_encoder, discriminator,
-                            src_classifier, src_data_loader, tgt_data_train_loader, tgt_data_all_loader)
+                            src_classifier, src_loader, tgt_train_loader, tgt_all_loader)
 
     # argument setting
     print("=== Argument Setting ===")
-    print("src: " + args.src)
-    print("tgt: " + args.tgt)
     print("seed: " + str(args.seed))
     print("train_seed: " + str(args.train_seed))
     print("model_type: " + str(args.model))
@@ -188,12 +195,14 @@ def main():
     print("AD weight: " + str(args.alpha))
     print("KD weight: " + str(args.beta))
     print("temperature: " + str(args.temperature))
+    print("src: " + args.src)
+    print("tgt: " + args.tgt)
     # eval target encoder on lambda0.1 set of target dataset
     print("=== Evaluating classifier for encoded target domain ===")
     print(">>> source only <<<")
-    evaluate(src_encoder, src_classifier, tgt_data_all_loader)
+    evaluate(src_encoder, src_classifier, tgt_all_loader)
     print(">>> domain adaption <<<")
-    evaluate(tgt_encoder, src_classifier, tgt_data_all_loader)
+    evaluate(tgt_encoder, src_classifier, tgt_all_loader)
 
 
 if __name__ == '__main__':
