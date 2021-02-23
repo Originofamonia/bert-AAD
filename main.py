@@ -51,11 +51,11 @@ def parse_arguments():
                         help="lower and upper clip value for disc. weights")
     parser.add_argument('--batch_size', type=int, default=16,
                         help="Specify batch size")
-    parser.add_argument('--pre_epochs', type=int, default=19,
+    parser.add_argument('--pre_epochs', type=int, default=29,
                         help="Specify the number of epochs for pretrain")
     parser.add_argument('--pre_log_step', type=int, default=1,
                         help="Specify log step size for pretrain")
-    parser.add_argument('--num_epochs', type=int, default=70,
+    parser.add_argument('--num_epochs', type=int, default=80,
                         help="Specify the number of epochs for adaptation")
     parser.add_argument('--log_step', type=int, default=5,
                         help="Specify log step size for adaptation")
