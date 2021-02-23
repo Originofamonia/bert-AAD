@@ -18,7 +18,7 @@ import argparse
 def parse_arguments():
     # argument parsing
     parser = argparse.ArgumentParser(description="Specify Params for Experimental Setting")
-    parser.add_argument('--src', type=str, default="books",
+    parser.add_argument('--src', type=str, default="electronics",
                         choices=["books", "dvd", "electronics", "kitchen", "blog", "airline", "imdb"],
                         help="Specify src dataset")
     parser.add_argument('--tgt', type=str, default="dvd",
