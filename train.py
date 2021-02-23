@@ -142,16 +142,6 @@ def adapt(args, src_encoder, tgt_encoder, discriminator,
                 desc = f"Epoch [{epoch}/{args.num_epochs}] Step [{step}/{len_data_loader}]: acc={acc.item():.4f} " \
                        f"g_loss={gen_loss.item():.4f} d_loss={dis_loss.item():.4f} kd_loss={kd_loss.item():.4f}"
                 pbar.set_description(desc=desc)
-                # print("Epoch [%.2d/%.2d] Step [%.3d/%.3d]: "
-                #       "acc=%.4f g_loss=%.4f d_loss=%.4f kd_loss=%.4f"
-                #       % (epoch + 1,
-                #          args.num_epochs,
-                #          step + 1,
-                #          len_data_loader,
-                #          acc.item(),
-                #          gen_loss.item(),
-                #          dis_loss.item(),
-                #          kd_loss.item()))
 
         evaluate(tgt_encoder, src_classifier, tgt_data_all_loader)
 

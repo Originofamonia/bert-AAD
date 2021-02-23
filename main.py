@@ -37,9 +37,9 @@ def parse_arguments():
     parser.add_argument('--model', type=str, default="bert",
                         choices=["bert", "distilbert", "roberta", "distilroberta"],
                         help="Specify model type")
-    parser.add_argument('--max_seq_length', type=int, default=128,
+    parser.add_argument('--max_seq_length', type=int, default=512,
                         help="Specify maximum sequence length")
-    parser.add_argument('--alpha', type=float, default=1.0,
+    parser.add_argument('--alpha', type=float, default=3.0,
                         help="Specify adversarial weight")
     parser.add_argument('--beta', type=float, default=1.0,
                         help="Specify KD loss weight")
@@ -55,7 +55,7 @@ def parse_arguments():
                         help="Specify the number of epochs for pretrain")
     parser.add_argument('--pre_log_step', type=int, default=1,
                         help="Specify log step size for pretrain")
-    parser.add_argument('--num_epochs', type=int, default=80,
+    parser.add_argument('--num_epochs', type=int, default=75,
                         help="Specify the number of epochs for adaptation")
     parser.add_argument('--log_step', type=int, default=5,
                         help="Specify log step size for adaptation")
