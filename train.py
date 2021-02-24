@@ -99,10 +99,10 @@ def adapt(args, src_encoder, tgt_encoder, discriminator,
             label_tgt = make_cuda(torch.zeros(feat_tgt.size(0))).unsqueeze(1)
             label_concat = torch.cat((label_src, label_tgt), 0)
 
-            # domain discriminator loss
+            # domain discriminator loss of discriminator
             dis_loss = bce_loss(pred_concat, label_concat)
             dis_loss.backward()
-
+            # increase the clip_value from 0.01 to 0.1 is bad
             for p in discriminator.parameters():
                 p.data.clamp_(-args.clip_value, args.clip_value)
             # optimize discriminator
@@ -125,7 +125,7 @@ def adapt(args, src_encoder, tgt_encoder, discriminator,
             kd_loss = kl_div_loss(tgt_prob, src_prob.detach()) * t * t
 
             # compute loss for target encoder
-            gen_loss = bce_loss(pred_tgt, label_src)
+            gen_loss = bce_loss(pred_tgt, label_src)  # domain loss of tgt encoder
             loss_tgt = args.alpha * gen_loss + args.beta * kd_loss
             loss_tgt.backward()
             torch.nn.utils.clip_grad_norm_(tgt_encoder.parameters(), args.max_grad_norm)

@@ -43,11 +43,11 @@ def parse_arguments():
                         help="Specify adversarial weight")
     parser.add_argument('--beta', type=float, default=1.0,
                         help="Specify KD loss weight")
-    parser.add_argument('--temperature', type=int, default=20,
+    parser.add_argument('--temperature', type=int, default=5,
                         help="Specify temperature")
     parser.add_argument("--max_grad_norm", default=1.0, type=float,
                         help="Max gradient norm.")
-    parser.add_argument("--clip_value", type=float, default=0.1,
+    parser.add_argument("--clip_value", type=float, default=1e-2,
                         help="lower and upper clip value for disc. weights")
     parser.add_argument('--batch_size', type=int, default=16,
                         help="Specify batch size")
