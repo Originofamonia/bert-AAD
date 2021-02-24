@@ -15,7 +15,7 @@ def pretrain(args, encoder, classifier, data_loader):
 
     # setup criterion and optimizer
     optimizer = optim.Adam(list(encoder.parameters()) + list(classifier.parameters()),
-                           lr=param.c_learning_rate)
+                           lr=param.c_lr)
     CELoss = nn.CrossEntropyLoss()
 
     # set train state for Dropout and BN layers
@@ -48,8 +48,8 @@ def pretrain(args, encoder, classifier, data_loader):
                 pbar.set_description(desc=desc)
 
     # save final model
-    # save_model(args, encoder, param.src_encoder_path)
-    # save_model(args, classifier, param.src_classifier_path)
+    save_model(args, encoder, param.src_encoder_path)
+    save_model(args, classifier, param.src_classifier_path)
 
     return encoder, classifier
 
@@ -67,8 +67,8 @@ def adapt(args, src_encoder, tgt_encoder, discriminator,
     # setup criterion and optimizer
     bce_loss = nn.BCELoss()
     kl_div_loss = nn.KLDivLoss(reduction='batchmean')
-    optimizer_g = optim.Adam(tgt_encoder.parameters(), lr=param.d_learning_rate)
-    optimizer_d = optim.Adam(discriminator.parameters(), lr=param.d_learning_rate)
+    optimizer_g = optim.Adam(tgt_encoder.parameters(), lr=param.d_lr)
+    optimizer_d = optim.Adam(discriminator.parameters(), lr=param.d_lr)
     len_data_loader = min(len(src_data_loader), len(tgt_data_train_loader))
 
     for epoch in range(args.num_epochs):
