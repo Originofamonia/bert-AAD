@@ -47,7 +47,7 @@ def parse_arguments():
                         help="Specify temperature")
     parser.add_argument("--max_grad_norm", default=1.0, type=float,
                         help="Max gradient norm.")
-    parser.add_argument("--clip_value", type=float, default=0.01,
+    parser.add_argument("--clip_value", type=float, default=0.1,
                         help="lower and upper clip value for disc. weights")
     parser.add_argument('--batch_size', type=int, default=16,
                         help="Specify batch size")

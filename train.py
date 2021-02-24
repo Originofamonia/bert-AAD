@@ -46,12 +46,6 @@ def pretrain(args, encoder, classifier, data_loader):
                 desc = f"Epoch [{epoch}/{args.pre_epochs}] Step [{step}/{len(data_loader)}]: " \
                        f"c_loss={cls_loss.item():.4f} "
                 pbar.set_description(desc=desc)
-                # print("Epoch [%.2d/%.2d] Step [%.3d/%.3d]: cls_loss=%.4f"
-                #       % (epoch + 1,
-                #          args.pre_epochs,
-                #          step + 1,
-                #          len(data_loader),
-                #          cls_loss.item()))
 
     # save final model
     # save_model(args, encoder, param.src_encoder_path)
@@ -71,10 +65,10 @@ def adapt(args, src_encoder, tgt_encoder, discriminator,
     discriminator.train()
 
     # setup criterion and optimizer
-    BCELoss = nn.BCELoss()
-    KLDivLoss = nn.KLDivLoss(reduction='batchmean')
-    optimizer_G = optim.Adam(tgt_encoder.parameters(), lr=param.d_learning_rate)
-    optimizer_D = optim.Adam(discriminator.parameters(), lr=param.d_learning_rate)
+    bce_loss = nn.BCELoss()
+    kl_div_loss = nn.KLDivLoss(reduction='batchmean')
+    optimizer_g = optim.Adam(tgt_encoder.parameters(), lr=param.d_learning_rate)
+    optimizer_d = optim.Adam(discriminator.parameters(), lr=param.d_learning_rate)
     len_data_loader = min(len(src_data_loader), len(tgt_data_train_loader))
 
     for epoch in range(args.num_epochs):
@@ -88,7 +82,7 @@ def adapt(args, src_encoder, tgt_encoder, discriminator,
             tgt_mask = make_cuda(tgt_mask)
 
             # zero gradients for optimizer
-            optimizer_D.zero_grad()
+            optimizer_d.zero_grad()
 
             # extract and concat features
             with torch.no_grad():
@@ -105,38 +99,38 @@ def adapt(args, src_encoder, tgt_encoder, discriminator,
             label_tgt = make_cuda(torch.zeros(feat_tgt.size(0))).unsqueeze(1)
             label_concat = torch.cat((label_src, label_tgt), 0)
 
-            # compute loss for discriminator
-            dis_loss = BCELoss(pred_concat, label_concat)
+            # domain discriminator loss
+            dis_loss = bce_loss(pred_concat, label_concat)
             dis_loss.backward()
 
             for p in discriminator.parameters():
                 p.data.clamp_(-args.clip_value, args.clip_value)
             # optimize discriminator
-            optimizer_D.step()
+            optimizer_d.step()
 
             pred_cls = torch.squeeze(pred_concat.max(1)[1])
             acc = (pred_cls == label_concat).float().mean()
 
             # zero gradients for optimizer
-            optimizer_G.zero_grad()
-            T = args.temperature
+            optimizer_g.zero_grad()
+            t = args.temperature
 
             # predict on discriminator
             pred_tgt = discriminator(feat_tgt)
 
             # logits for KL-divergence
             with torch.no_grad():
-                src_prob = F.softmax(src_classifier(feat_src) / T, dim=-1)
-            tgt_prob = F.log_softmax(src_classifier(feat_src_tgt) / T, dim=-1)
-            kd_loss = KLDivLoss(tgt_prob, src_prob.detach()) * T * T
+                src_prob = F.softmax(src_classifier(feat_src) / t, dim=-1)
+            tgt_prob = F.log_softmax(src_classifier(feat_src_tgt) / t, dim=-1)
+            kd_loss = kl_div_loss(tgt_prob, src_prob.detach()) * t * t
 
             # compute loss for target encoder
-            gen_loss = BCELoss(pred_tgt, label_src)
+            gen_loss = bce_loss(pred_tgt, label_src)
             loss_tgt = args.alpha * gen_loss + args.beta * kd_loss
             loss_tgt.backward()
             torch.nn.utils.clip_grad_norm_(tgt_encoder.parameters(), args.max_grad_norm)
             # optimize target encoder
-            optimizer_G.step()
+            optimizer_g.step()
 
             if step % args.log_step == 0:
                 desc = f"Epoch [{epoch}/{args.num_epochs}] Step [{step}/{len_data_loader}]: acc={acc.item():.4f} " \
