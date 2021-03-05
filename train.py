@@ -1,13 +1,15 @@
 """Adversarial adaptation to train target encoder."""
 
+import os
+import numpy as np
 import torch
-from utils import make_cuda
 import torch.nn.functional as F
 import torch.nn as nn
 import param
 import torch.optim as optim
 from tqdm import tqdm
-from utils import save_model
+from sklearn.mixture import GaussianMixture
+from utils import make_cuda, save_model
 
 
 def pretrain(args, encoder, classifier, data_loader):
@@ -48,8 +50,8 @@ def pretrain(args, encoder, classifier, data_loader):
                 pbar.set_description(desc=desc)
 
     # save final model
-    save_model(args, encoder, param.src_encoder_path)
-    save_model(args, classifier, param.src_classifier_path)
+    # save_model(args, encoder, param.src_encoder_path)
+    # save_model(args, classifier, param.src_classifier_path)
 
     return encoder, classifier
 
@@ -142,9 +144,177 @@ def adapt(args, src_encoder, tgt_encoder, discriminator,
     return tgt_encoder
 
 
+def src_tgt_free_adapt(args, src_encoder, tgt_encoder, discriminator, src_classifier,
+                       src_data_loader, tgt_data_train_loader, tgt_data_all_loader):
+    """Train encoder for target domain w src tgt data free"""
+
+    # set train state for Dropout and BN layers
+    src_encoder.eval()
+    src_classifier.eval()
+    tgt_encoder.train()
+    discriminator.train()
+
+    # setup criterion and optimizer
+    bce_loss = nn.BCELoss()
+    kl_div_loss = nn.KLDivLoss(reduction='batchmean')
+    optimizer_g = optim.Adam(tgt_encoder.parameters(), lr=param.d_lr)
+    optimizer_d = optim.Adam(discriminator.parameters(), lr=param.d_lr)
+    len_data_loader = min(len(src_data_loader), len(tgt_data_train_loader))
+
+    for epoch in range(args.num_epochs):
+        # zip source and target data pair
+        pbar = tqdm(zip(src_data_loader, tgt_data_train_loader))
+        for step, ((reviews_src, src_mask, _), (reviews_tgt, tgt_mask, _)) in enumerate(pbar):
+            reviews_src = make_cuda(reviews_src)
+            src_mask = make_cuda(src_mask)
+
+            reviews_tgt = make_cuda(reviews_tgt)
+            tgt_mask = make_cuda(tgt_mask)
+
+            # zero gradients for optimizer
+            optimizer_d.zero_grad()
+
+            # extract and concat features
+            with torch.no_grad():
+                feat_src = src_encoder(reviews_src, src_mask)
+            feat_src_tgt = tgt_encoder(reviews_src, src_mask)
+            feat_tgt = tgt_encoder(reviews_tgt, tgt_mask)
+            feat_concat = torch.cat((feat_src_tgt, feat_tgt), 0)
+
+            # predict on discriminator
+            pred_concat = discriminator(feat_concat.detach())
+
+            # prepare real and fake label
+            label_src = make_cuda(torch.ones(feat_src_tgt.size(0))).unsqueeze(1)
+            label_tgt = make_cuda(torch.zeros(feat_tgt.size(0))).unsqueeze(1)
+            label_concat = torch.cat((label_src, label_tgt), 0)
+
+            # domain discriminator loss of discriminator
+            dis_loss = bce_loss(pred_concat, label_concat)
+            dis_loss.backward()
+            # increase the clip_value from 0.01 to 0.1 is bad
+            for p in discriminator.parameters():
+                p.data.clamp_(-args.clip_value, args.clip_value)
+            # optimize discriminator
+            optimizer_d.step()
+
+            pred_cls = torch.squeeze(pred_concat.max(1)[1])
+            acc = (pred_cls == label_concat).float().mean()
+
+            # zero gradients for optimizer
+            optimizer_g.zero_grad()
+            t = args.temperature
+
+            # predict on discriminator
+            pred_tgt = discriminator(feat_tgt)
+
+            # logits for KL-divergence
+            with torch.no_grad():
+                src_prob = F.softmax(src_classifier(feat_src) / t, dim=-1)
+            tgt_prob = F.log_softmax(src_classifier(feat_src_tgt) / t, dim=-1)
+            kd_loss = kl_div_loss(tgt_prob, src_prob.detach()) * t * t
+
+            # compute loss for target encoder
+            gen_loss = bce_loss(pred_tgt, label_src)  # domain loss of tgt encoder
+            loss_tgt = args.alpha * gen_loss + args.beta * kd_loss
+            loss_tgt.backward()
+            torch.nn.utils.clip_grad_norm_(tgt_encoder.parameters(), args.max_grad_norm)
+            # optimize target encoder
+            optimizer_g.step()
+
+            if step % args.log_step == 0:
+                desc = f"Epoch [{epoch}/{args.num_epochs}] Step [{step}/{len_data_loader}]: acc={acc.item():.4f} " \
+                       f"g_loss={gen_loss.item():.4f} d_loss={dis_loss.item():.4f} kd_loss={kd_loss.item():.4f}"
+                pbar.set_description(desc=desc)
+
+        evaluate(tgt_encoder, src_classifier, tgt_data_all_loader)
+
+    return tgt_encoder
+
+
+def centroid_compute(args, src_encoder, src_classifier, src_data_loader):
+    """
+    calculate source feature centroids
+    based on source_target_free.py
+    """
+    src_encoder.eval()
+    src_classifier.eval()
+    cov = np.zeros([2, 256])  # num_classes, feature_dim
+    mean = np.zeros([2, 256])  # change later
+    # s_feature_dict used when adapting
+    # s_feature_dict = np.zeros([2, 6000, 256])  # num_classes, num_samples, feature_dim
+    for i in range(2):  # num_classes
+        x = []
+        pbar = tqdm(src_data_loader)
+        for j, (reviews, masks, labels) in enumerate(pbar):
+            reviews = make_cuda(reviews)
+            masks = make_cuda(masks)
+            for b in range(reviews.size(0)):
+                if labels[b] == i:
+                    with torch.no_grad():
+                        review = reviews[b:b + 1]
+                        mask = masks[b:b + 1]
+                        s_feature = src_encoder(review, mask)
+                        s_feature = s_feature.cpu().numpy()
+                        if not x:
+                            x = s_feature.T
+                        else:
+                            x = np.concatenate([x, s_feature.T], 1)
+
+        cov[i, :] = np.var(x, 1)
+        mean[i, :] = np.mean(x, 1)
+        # probably not needed here
+        # s_feature_dict[i, :, :] = np.random.multivariate_normal(mean[i, :], np.diag(cov[i, :]), 6000)
+
+    np.savez(os.path.join(param.model_root, 'src_mean_cov'), mean, cov)
+
+
+def target_gmm(args, tgt_encoder, tgt_data_all_loader, num_cluster):
+    """
+    build target GMM and resample from it
+    based on source_target_free.py
+    """
+    tgt_encoder.eval()
+    feature_s = torch.Tensor().float().cuda()
+    k = 0
+    pbar = tqdm(tgt_data_all_loader)
+    for j, (review, mask, _) in enumerate(pbar):
+        review = make_cuda(review)
+        mask = make_cuda(mask)
+        batch_feature = tgt_encoder(review, mask)
+        print(batch_feature.size())
+        feature_s = torch.cat((feature_s, batch_feature), 0)
+        k += 1
+
+        feature_s = feature_s.cpu().numpy()
+        try:
+            # num_class * num_cluster, not sure why num_cluster is not 1
+            gmm = GaussianMixture(n_components=2 * num_cluster,
+                                  ).fit(feature_s)
+        except Exception as e:
+            print(e)
+
+        tgt_mean = gmm.mean_
+        tgt_var = gmm.covariance_
+        print(gmm.converged_)
+        t_feature_dict = np.zeros([6000, self.netF.output_dim()])  # 6000 samples, feature_dim
+        p = gmm.weights_
+        p[len(p) - 1] += 1 - np.sum(p)
+        decrete = np.random.multinomial(6000, p, 1)
+        k = 0
+        for i in range(2 * num_cluster):
+            t_feature_dict[k: k + decrete[0, i], :] = np.random.multivariate_normal(tgt_mean[i, :], tgt_var[i, :, :],
+                                                                                    decrete[0, i])
+            k += decrete[0, i]
+
+        return t_feature_dict
+
+
 def dann_adapt(args, src_encoder, tgt_encoder, discriminator, src_classifier,
                src_data_loader, tgt_data_train_loader, tgt_data_all_loader):
-    """haven't implemented dann"""
+    """
+    haven't implemented dann
+    """
 
     # set train state for Dropout and BN layers
     src_encoder.eval()
