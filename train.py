@@ -173,10 +173,10 @@ def adda_adapt(args, src_encoder, tgt_encoder, critic,
             # extract and concat features
             feat_src = src_encoder(reviews_src, src_mask)
             feat_tgt = tgt_encoder(reviews_tgt, tgt_mask)
-            feat_concat = torch.squeeze(torch.cat((feat_src, feat_tgt), 0))
+            feat_concat = torch.cat((feat_src, feat_tgt), 0)
 
             # predict on discriminator
-            pred_concat = critic(feat_concat.detach())
+            pred_concat = torch.squeeze(critic(feat_concat.detach()))
 
             # prepare real and fake label
             label_src = make_cuda(torch.ones(feat_src.size(0)).long())
@@ -184,8 +184,8 @@ def adda_adapt(args, src_encoder, tgt_encoder, critic,
             label_concat = torch.cat((label_src, label_tgt), 0)
 
             # compute loss for critic
-            print('pred_concat:', pred_concat)
-            print('label_concat:', label_concat)
+            print('pred_concat:', pred_concat.size())
+            print('label_concat:', label_concat.size())
             loss_critic = criterion(pred_concat, label_concat)
             loss_critic.backward()
 
