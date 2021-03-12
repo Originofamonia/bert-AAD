@@ -178,15 +178,15 @@ def main():
     for params in src_classifier.parameters():
         params.requires_grad = False
 
-    s_feature_dict = src_gmm(args, src_encoder, src_classifier, src_loader)
-    t_feature_dict = tgt_gmm(args, tgt_encoder, tgt_all_loader, 1)
+    # s_feature_dict = src_gmm(args, src_encoder, src_classifier, src_loader)
+    # t_feature_dict = tgt_gmm(args, tgt_encoder, tgt_all_loader, 1)
 
     # train target encoder by ADDA
     print("=== Training encoder for target domain ===")
     if args.adapt:
         tgt_encoder.load_state_dict(src_encoder.state_dict())
-        tgt_encoder = adda_adapt(args, src_encoder, tgt_encoder, discriminator, src_classifier,
-                             s_feature_dict, t_feature_dict, src_loader, tgt_train_loader, tgt_all_loader)
+        tgt_encoder = adda_adapt(args, src_encoder, tgt_encoder, discriminator,
+                                 src_loader, tgt_train_loader)
 
     # argument setting
     print(f"model_type: {args.model}; max_seq_len: {args.max_seq_length}; batch_size: {args.batch_size}; "
