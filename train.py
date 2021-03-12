@@ -58,7 +58,7 @@ def pretrain(args, encoder, classifier, data_loader):
 
 def adapt(args, src_encoder, tgt_encoder, discriminator,
           src_classifier, src_data_loader, tgt_data_train_loader, tgt_data_all_loader):
-    """Train encoder for target domain."""
+    """Train tgt_encoder using bert-AAD"""
 
     # set train state for Dropout and BN layers
     src_encoder.eval()
@@ -184,6 +184,8 @@ def adda_adapt(args, src_encoder, tgt_encoder, critic,
             label_concat = torch.cat((label_src, label_tgt), 0)
 
             # compute loss for critic
+            print('pred_concat:', pred_concat)
+            print('label_concat:', label_concat)
             loss_critic = criterion(pred_concat, label_concat)
             loss_critic.backward()
 
