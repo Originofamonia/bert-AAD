@@ -173,7 +173,7 @@ def adda_adapt(args, src_encoder, tgt_encoder, critic,
             # extract and concat features
             feat_src = src_encoder(reviews_src, src_mask)
             feat_tgt = tgt_encoder(reviews_tgt, tgt_mask)
-            feat_concat = torch.cat((feat_src, feat_tgt), 0)
+            feat_concat = torch.squeeze(torch.cat((feat_src, feat_tgt), 0))
 
             # predict on discriminator
             pred_concat = critic(feat_concat.detach())
