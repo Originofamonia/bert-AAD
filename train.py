@@ -165,14 +165,14 @@ def adda_adapt(args, src_encoder, tgt_encoder, critic,
     for epoch in range(args.num_epochs):
         # zip source and target data pair
         pbar = tqdm(zip(src_data_loader, tgt_data_loader))
-        for step, ((reviews_src, _), (reviews_tgt, _)) in enumerate(pbar):
+        for step, ((reviews_src, src_mask, _), (reviews_tgt, tgt_mask, _)) in enumerate(pbar):
 
             # zero gradients for optimizer
             optimizer_critic.zero_grad()
 
             # extract and concat features
-            feat_src = src_encoder(reviews_src)
-            feat_tgt = tgt_encoder(reviews_tgt)
+            feat_src = src_encoder(reviews_src, src_mask)
+            feat_tgt = tgt_encoder(reviews_tgt, tgt_mask)
             feat_concat = torch.cat((feat_src, feat_tgt), 0)
 
             # predict on discriminator
@@ -197,7 +197,7 @@ def adda_adapt(args, src_encoder, tgt_encoder, critic,
             optimizer_tgt.zero_grad()
 
             # extract and target features
-            feat_tgt = tgt_encoder(reviews_tgt)
+            feat_tgt = tgt_encoder(reviews_tgt, tgt_mask)
 
             # predict on discriminator
             pred_tgt = critic(feat_tgt)
