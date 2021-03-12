@@ -21,7 +21,7 @@ d_model_path = "critic.pt"
 
 # params for training network
 # num_gpu = 1
-manual_seed = None
+# manual_seed = None
 
 # params for optimizing models
 c_lr = 5e-5  # src_encoder + classifier lr
@@ -30,6 +30,7 @@ d_lr = 1e-5  # tgt_encoder + discriminator lr
 # n_vocab = 30522
 hidden_size = 768
 intermediate_size = 3072
+num_resample = 2000
 # embed_dim = 300
 # kernel_num = 20
 # kernel_sizes = [3, 4, 5]

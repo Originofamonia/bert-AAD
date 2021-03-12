@@ -144,7 +144,95 @@ def adapt(args, src_encoder, tgt_encoder, discriminator,
     return tgt_encoder
 
 
-def src_tgt_free_adapt(args, src_encoder, tgt_encoder, discriminator, src_classifier,
+def adda_adapt(args, src_encoder, tgt_encoder, critic,
+               src_data_loader, tgt_data_loader):
+    """
+    Adapt tgt encoder by ADDA
+    """
+    # set train state for Dropout and BN layers
+    src_encoder.eval()
+    tgt_encoder.train()
+    critic.train()
+
+    # setup criterion and optimizer
+    criterion = nn.CrossEntropyLoss()
+    optimizer_tgt = optim.Adam(tgt_encoder.parameters(),
+                               lr=args.t_lr,)
+                               # betas=(args.beta1, args.beta2))
+    optimizer_critic = optim.Adam(critic.parameters(),
+                                  lr=args.c_lr,)
+                                  # betas=(args.beta1, args.beta2))
+    len_data_loader = min(len(src_data_loader), len(tgt_data_loader))
+
+    for epoch in range(args.num_epochs):
+        # zip source and target data pair
+        pbar = tqdm(zip(src_data_loader, tgt_data_loader))
+        for step, ((reviews_src, _), (reviews_tgt, _)) in enumerate(pbar):
+
+            # zero gradients for optimizer
+            optimizer_critic.zero_grad()
+
+            # extract and concat features
+            feat_src = src_encoder(reviews_src)
+            feat_tgt = tgt_encoder(reviews_tgt)
+            feat_concat = torch.cat((feat_src, feat_tgt), 0)
+
+            # predict on discriminator
+            pred_concat = critic(feat_concat.detach())
+
+            # prepare real and fake label
+            label_src = make_cuda(torch.ones(feat_src.size(0)).long())
+            label_tgt = make_cuda(torch.zeros(feat_tgt.size(0)).long())
+            label_concat = torch.cat((label_src, label_tgt), 0)
+
+            # compute loss for critic
+            loss_critic = criterion(pred_concat, label_concat)
+            loss_critic.backward()
+
+            # optimize critic
+            optimizer_critic.step()
+
+            pred_cls = torch.squeeze(pred_concat.max(1)[1])
+            acc = (pred_cls == label_concat).float().mean()
+
+            # zero gradients for optimizer
+            optimizer_tgt.zero_grad()
+
+            # extract and target features
+            feat_tgt = tgt_encoder(reviews_tgt)
+
+            # predict on discriminator
+            pred_tgt = critic(feat_tgt)
+
+            # prepare fake labels
+            label_tgt = make_cuda(torch.ones(feat_tgt.size(0)).long())
+
+            # compute loss for target encoder
+            loss_tgt = criterion(pred_tgt, label_tgt)
+            loss_tgt.backward()
+
+            # optimize target encoder
+            optimizer_tgt.step()
+
+            if (step + 1) % args.log_step == 0:
+                desc = "Epoch [{}/{}] Step [{}/{}]: t_loss={:.4f} c_loss={:.4f} " \
+                       "acc={:.4f}".format(epoch,
+                                           args.num_epochs,
+                                           step,
+                                           len_data_loader,
+                                           loss_tgt.item(),
+                                           loss_critic.item(),
+                                           acc.item())
+                pbar.set_description(desc=desc)
+
+    # torch.save(critic.state_dict(), os.path.join(
+    #     args.model_root, "ADDA-critic.pt"))
+    # torch.save(tgt_encoder.state_dict(), os.path.join(
+    #     args.model_root, "ADDA-target-encoder.pt"))
+    return tgt_encoder
+
+
+def src_tgt_free_adapt(args, src_encoder, tgt_encoder, discriminator, src_classifier, s_feature_dict, t_feature_dict,
                        src_data_loader, tgt_data_train_loader, tgt_data_all_loader):
     """Train encoder for target domain w src tgt data free"""
 
@@ -163,22 +251,27 @@ def src_tgt_free_adapt(args, src_encoder, tgt_encoder, discriminator, src_classi
 
     for epoch in range(args.num_epochs):
         # zip source and target data pair
-        pbar = tqdm(zip(src_data_loader, tgt_data_train_loader))
-        for step, ((reviews_src, src_mask, _), (reviews_tgt, tgt_mask, _)) in enumerate(pbar):
-            reviews_src = make_cuda(reviews_src)
-            src_mask = make_cuda(src_mask)
+        pbar = tqdm(range(len_data_loader))
+        for step in enumerate(pbar):
+            feat_src = np.zeros([args.batch_size, param.hidden_size])
+            source_logits = np.random.randint(0, args.num_class, args.batch_size)
 
-            reviews_tgt = make_cuda(reviews_tgt)
-            tgt_mask = make_cuda(tgt_mask)
+            feat_tgt = np.zeros([args.batch_size, param.hidden_size])
+            for b in range(args.batch_size):
+                feat_src[b, :] = s_feature_dict[source_logits[b], np.random.randint(0, param.num_resample), :]
+                feat_tgt[b, :] = t_feature_dict[np.random.randint(0, param.num_resample), :]
+            feat_src = torch.tensor(feat_src, dtype=torch.float32).cuda()
+            feat_tgt = torch.tensor(feat_tgt, dtype=torch.float32).cuda()
 
             # zero gradients for optimizer
             optimizer_d.zero_grad()
 
             # extract and concat features
-            with torch.no_grad():
-                feat_src = src_encoder(reviews_src, src_mask)
-            feat_src_tgt = tgt_encoder(reviews_src, src_mask)
-            feat_tgt = tgt_encoder(reviews_tgt, tgt_mask)
+            # with torch.no_grad():
+            #     feat_src = src_encoder(reviews_src, src_mask)
+            # feat_src_tgt = tgt_encoder(reviews_src, src_mask)
+            # not sure what src_mask is, so haven't implement feat_src_tgt
+            # try ADDA adapt first, BERT-ADDA
             feat_concat = torch.cat((feat_src_tgt, feat_tgt), 0)
 
             # predict on discriminator
@@ -232,9 +325,9 @@ def src_tgt_free_adapt(args, src_encoder, tgt_encoder, discriminator, src_classi
     return tgt_encoder
 
 
-def centroid_compute(args, src_encoder, src_classifier, src_data_loader):
+def src_gmm(args, src_encoder, src_classifier, src_data_loader):
     """
-    calculate source feature centroids
+    calculate source feature centroids; maybe used for get s_feature_dict
     based on source_target_free.py
     """
     src_encoder.eval()
@@ -242,7 +335,7 @@ def centroid_compute(args, src_encoder, src_classifier, src_data_loader):
     cov = np.zeros([2, 256])  # num_classes, feature_dim
     mean = np.zeros([2, 256])  # change later
     # s_feature_dict used when adapting
-    # s_feature_dict = np.zeros([2, 6000, 256])  # num_classes, num_samples, feature_dim
+    s_feature_dict = np.zeros([2, param.num_resample, param.hidden_size])  # num_classes, num_samples, feature_dim
     for i in range(2):  # num_classes
         x = []
         pbar = tqdm(src_data_loader)
@@ -264,14 +357,15 @@ def centroid_compute(args, src_encoder, src_classifier, src_data_loader):
         cov[i, :] = np.var(x, 1)
         mean[i, :] = np.mean(x, 1)
         # probably not needed here
-        # s_feature_dict[i, :, :] = np.random.multivariate_normal(mean[i, :], np.diag(cov[i, :]), 6000)
+        s_feature_dict[i, :, :] = np.random.multivariate_normal(mean[i, :], np.diag(cov[i, :]), param.num_resample)
 
     np.savez(os.path.join(param.model_root, 'src_mean_cov'), mean, cov)
+    return s_feature_dict
 
 
-def target_gmm(args, tgt_encoder, tgt_data_all_loader, num_cluster):
+def tgt_gmm(args, tgt_encoder, tgt_data_all_loader, num_cluster):
     """
-    build target GMM and resample from it
+    build target GMM and resample from it, used in adapt
     based on source_target_free.py
     """
     tgt_encoder.eval()
@@ -297,10 +391,10 @@ def target_gmm(args, tgt_encoder, tgt_data_all_loader, num_cluster):
         tgt_mean = gmm.mean_
         tgt_var = gmm.covariance_
         print(gmm.converged_)
-        t_feature_dict = np.zeros([6000, self.netF.output_dim()])  # 6000 samples, feature_dim
+        t_feature_dict = np.zeros([param.num_resample, param.hidden_size])  # param.num_resample samples, feature_dim
         p = gmm.weights_
         p[len(p) - 1] += 1 - np.sum(p)
-        decrete = np.random.multinomial(6000, p, 1)
+        decrete = np.random.multinomial(param.num_resample, p, 1)
         k = 0
         for i in range(2 * num_cluster):
             t_feature_dict[k: k + decrete[0, i], :] = np.random.multivariate_normal(tgt_mean[i, :], tgt_var[i, :, :],

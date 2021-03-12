@@ -1,7 +1,7 @@
 """Main script for bert-AAD source target free"""
 
 import param
-from train import pretrain, evaluate, src_gmm, tgt_gmm, src_tgt_free_adapt
+from train import pretrain, evaluate, src_gmm, tgt_gmm, adda_adapt
 from model import (BertEncoder, DistilBertEncoder, DistilRobertaEncoder,
                    BertClassifier, Discriminator, RobertaEncoder, RobertaClassifier)
 from utils import XML2Array, CSV2Array, convert_examples_to_features, \
@@ -28,9 +28,9 @@ def parse_arguments():
                         help='Force to pretrain source encoder/classifier')
     parser.add_argument('--adapt', default=True, action='store_true',
                         help='Force to adapt target encoder')
-    parser.add_argument('--seed', type=int, default=42,
+    parser.add_argument('--seed', type=int, default=44,
                         help="Specify random state")
-    parser.add_argument('--train_seed', type=int, default=42,
+    parser.add_argument('--train_seed', type=int, default=44,
                         help="Specify random state")
     parser.add_argument('--load', default=False, action='store_true',
                         help="Load saved model")
@@ -181,11 +181,11 @@ def main():
     s_feature_dict = src_gmm(args, src_encoder, src_classifier, src_loader)
     t_feature_dict = tgt_gmm(args, tgt_encoder, tgt_all_loader, 1)
 
-    # train target encoder by GAN
+    # train target encoder by ADDA
     print("=== Training encoder for target domain ===")
     if args.adapt:
         tgt_encoder.load_state_dict(src_encoder.state_dict())
-        tgt_encoder = src_tgt_free_adapt(args, src_encoder, tgt_encoder, discriminator, src_classifier,
+        tgt_encoder = adda_adapt(args, src_encoder, tgt_encoder, discriminator, src_classifier,
                              s_feature_dict, t_feature_dict, src_loader, tgt_train_loader, tgt_all_loader)
 
     # argument setting

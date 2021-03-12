@@ -11,7 +11,7 @@ class BertEncoder(nn.Module):
 
     def forward(self, x, mask=None):
         outputs = self.encoder(x, attention_mask=mask)
-        feat = outputs[1]
+        feat = outputs[1]  # feat_dim is [batch_size, param.hidden_size]
         return feat
 
 
