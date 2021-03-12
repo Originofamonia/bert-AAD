@@ -155,7 +155,7 @@ def adda_adapt(args, src_encoder, tgt_encoder, critic,
     critic.train()
 
     # setup criterion and optimizer
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.BCELoss()
     optimizer_tgt = optim.Adam(tgt_encoder.parameters(), lr=param.d_lr)
                                # betas=(args.beta1, args.beta2))
     optimizer_critic = optim.Adam(critic.parameters(), lr=param.d_lr)
