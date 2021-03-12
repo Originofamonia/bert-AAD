@@ -24,8 +24,8 @@ d_model_path = "critic.pt"
 # manual_seed = None
 
 # params for optimizing models
-c_lr = 5e-5  # src_encoder + classifier lr
-d_lr = 1e-5  # tgt_encoder + discriminator lr
+c_lr = 5e-5  # src_encoder and classifier lr
+d_lr = 1e-5  # tgt_encoder and discriminator lr
 
 # n_vocab = 30522
 hidden_size = 768
