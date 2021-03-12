@@ -192,7 +192,7 @@ def adda_adapt(args, src_encoder, tgt_encoder, critic,
             # optimize critic
             optimizer_critic.step()
 
-            pred_cls = torch.squeeze(pred_concat.max(1)[1])
+            pred_cls = pred_concat.max(1)[1]
             acc = (pred_cls == label_concat).float().mean()
 
             # zero gradients for optimizer
